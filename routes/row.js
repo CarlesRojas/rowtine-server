@@ -90,7 +90,7 @@ router.post("/getMonthEntries", async (request, response) => {
                 },
             },
             { $match: { month, year } },
-            { $sort: { fastStartDate: 1 } },
+            { $sort: { date: 1 } },
         ]);
 
         // Treat data
