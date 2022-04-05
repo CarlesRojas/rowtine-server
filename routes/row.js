@@ -6,7 +6,7 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 // Get the Validation schemas
-const { setRowEntryValidation } = require("../validation");
+const { setRowEntryValidation, getMonthEntries } = require("../validation");
 
 // Get the schemes
 const RowEntry = require("../models/RowEntry");
@@ -65,6 +65,62 @@ router.post("/setRowEntry", async (request, response) => {
 
             response.status(200).json({ success: true });
         }
+    } catch (error) {
+        // Return error
+        response.status(500).json({ error });
+    }
+});
+
+router.post("/getMonthEntries", async (request, response) => {
+    // Validate data
+    const { error } = getMonthEntries(request.body);
+
+    // If there is a validation error
+    if (error) return response.status(422).json({ error: error.details[0].message });
+
+    try {
+        // Deconstruct request
+        const { month, year } = request.body;
+
+        const entries = await RowEntry.aggregate([
+            {
+                $addFields: {
+                    month: { $month: "$date" },
+                    year: { $year: "$date" },
+                },
+            },
+            { $match: { month, year } },
+            { $sort: { fastStartDate: 1 } },
+        ]);
+
+        // Treat data
+        var responseArray = [];
+        const numDaysInMonth = new Date(year, month, 0).getDate();
+        var entriesIndex = 0;
+        for (let i = 0; i < numDaysInMonth; i++) {
+            if (entriesIndex >= entries.length) {
+                responseArray.push(false);
+                continue;
+            }
+
+            // Get current entry
+            const { date } = entries[entriesIndex];
+
+            // Get day of the entry
+            const entryDate = new Date(date);
+            const entryDay = entryDate.getUTCDate();
+
+            // If entry matches this day -> Push info and go to next entry
+            if (entryDay === i + 1) {
+                responseArray.push(true);
+                entriesIndex++;
+            }
+
+            // Otherwise -> Push null and go to the next day
+            else responseArray.push(false);
+        }
+
+        response.status(200).json({ historic: responseArray });
     } catch (error) {
         // Return error
         response.status(500).json({ error });
